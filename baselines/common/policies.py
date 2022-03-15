@@ -48,8 +48,13 @@ class PolicyWithValue(object):
 
         self.pd, self.pi = self.pdtype.pdfromlatent(latent, init_scale=0.01)
 
+        # Actions probs
+        action_probs = self.pd.mean
+        self.action_probs = tf.identity(action_probs, name="action_probs")
+
         # Take an action
-        self.action = self.pd.sample()
+        action = self.pd.sample()
+        self.action = tf.identity(action, name="action")
 
         # Calculate the neg log of our probability
         self.neglogp = self.pd.neglogp(self.action)
@@ -61,7 +66,9 @@ class PolicyWithValue(object):
             self.vf = self.q
         else:
             self.vf = fc(vf_latent, 'vf', 1)
-            self.vf = self.vf[:,0]
+            self.vf = self.vf[:, 0]
+
+        self.vf = tf.identity(self.vf, name="value")
 
     def _evaluate(self, variables, observation, **extra_feed):
         sess = self.sess
@@ -74,7 +81,7 @@ class PolicyWithValue(object):
 
         return sess.run(variables, feed_dict)
 
-    def step(self, observation, **extra_feed):
+    def step(self, observation, return_action_probs=False, **extra_feed):
         """
         Compute next action(s) given the observation(s)
 
@@ -90,7 +97,10 @@ class PolicyWithValue(object):
         (action, value estimate, next state, negative log likelihood of the action under current policy parameters) tuple
         """
 
-        a, v, state, neglogp = self._evaluate([self.action, self.vf, self.state, self.neglogp], observation, **extra_feed)
+        a, action_probs, v, state, neglogp = self._evaluate(
+            [self.action, self.action_probs, self.vf, self.state, self.neglogp], observation, **extra_feed)
+        if return_action_probs:
+            return action_probs
         if state.size == 0:
             state = None
         return a, v, state, neglogp
@@ -118,7 +128,9 @@ class PolicyWithValue(object):
     def load(self, load_path):
         tf_util.load_state(load_path, sess=self.sess)
 
-def build_policy(env, policy_network, value_network=None,  normalize_observations=False, estimate_q=False, **policy_kwargs):
+
+def build_policy(env, policy_network, value_network=None, normalize_observations=False, estimate_q=False,
+                 **policy_kwargs):
     if isinstance(policy_network, str):
         network_type = policy_network
         policy_network = get_network_builder(network_type)(**policy_kwargs)
@@ -126,7 +138,8 @@ def build_policy(env, policy_network, value_network=None,  normalize_observation
     def policy_fn(nbatch=None, nsteps=None, sess=None, observ_placeholder=None):
         ob_space = env.observation_space
 
-        X = observ_placeholder if observ_placeholder is not None else observation_placeholder(ob_space, batch_size=nbatch)
+        X = observ_placeholder if observ_placeholder is not None else observation_placeholder(ob_space,
+                                                                                              batch_size=nbatch)
 
         extra_tensors = {}
 
@@ -146,10 +159,10 @@ def build_policy(env, policy_network, value_network=None,  normalize_observation
                 if recurrent_tensors is not None:
                     # recurrent architecture, need a few more steps
                     nenv = nbatch // nsteps
-                    assert nenv > 0, 'Bad input for recurrent policy: batch size {} smaller than nsteps {}'.format(nbatch, nsteps)
+                    assert nenv > 0, 'Bad input for recurrent policy: batch size {} smaller than nsteps {}'.format(
+                        nbatch, nsteps)
                     policy_latent, recurrent_tensors = policy_network(encoded_x, nenv)
                     extra_tensors.update(recurrent_tensors)
-
 
         _v_net = value_network
 
