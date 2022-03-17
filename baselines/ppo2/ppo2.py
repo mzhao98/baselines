@@ -348,15 +348,15 @@ def learn(*, network, env, total_timesteps, early_stopping=False, eval_env=None,
         # Visualization of rollouts with actual other agent
         run_type = additional_params["RUN_TYPE"]
         if run_type in ["ppo", "joint_ppo"] and update % additional_params["VIZ_FREQUENCY"] == 0:
-            from block_collab_py.mdp.block_env import OvercookedEnv
-            from block_collab_py.mdp.block_mdp import OvercookedGridworld
+            from block_collab_py.mdp.block_env import BlockCollabEnv
+            from block_collab_py.mdp.block_mdp import BlockCollabGridworld
             from block_collab_py.agents.agent import AgentPair
             # from overcooked_ai_py.agents.benchmarking import AgentEvaluator
             from influence_rl.baselines_utils import get_agent_from_model
             print(additional_params["SAVE_DIR"])
 
-            mdp = OvercookedGridworld.from_layout_name(**additional_params["mdp_params"])
-            overcooked_env = OvercookedEnv(mdp, **additional_params["env_params"])
+            mdp = BlockCollabGridworld.from_grid(**additional_params["mdp_params"])
+            block_env = BlockCollabEnv(mdp, **additional_params["env_params"])
             agent = get_agent_from_model(model, additional_params["sim_threads"],
                                          is_joint_action=(run_type == "joint_ppo"))
             agent.set_mdp(mdp)
@@ -368,10 +368,10 @@ def learn(*, network, env, total_timesteps, early_stopping=False, eval_env=None,
                     print("PPO agent on index 0:")
                     env.other_agent.set_mdp(mdp)
                     agent_pair = AgentPair(agent, env.other_agent)
-                    trajectory, time_taken, tot_rewards, tot_shaped_rewards = overcooked_env.run_agents(agent_pair,
+                    trajectory, time_taken, tot_rewards, tot_shaped_rewards = block_env.run_agents(agent_pair,
                                                                                                         display=True,
                                                                                                         display_until=100)
-                    overcooked_env.reset()
+                    block_env.reset()
                     agent_pair.reset()
                     print("tot rew", tot_rewards, "tot rew shaped", tot_shaped_rewards)
 
@@ -381,10 +381,10 @@ def learn(*, network, env, total_timesteps, early_stopping=False, eval_env=None,
             else:
                 agent_pair = AgentPair(agent)
 
-            trajectory, time_taken, tot_rewards, tot_shaped_rewards = overcooked_env.run_agents(agent_pair,
+            trajectory, time_taken, tot_rewards, tot_shaped_rewards = block_env.run_agents(agent_pair,
                                                                                                 display=True,
                                                                                                 display_until=100)
-            overcooked_env.reset()
+            block_env.reset()
             agent_pair.reset()
             print("tot rew", tot_rewards, "tot rew shaped", tot_shaped_rewards)
             print(additional_params["SAVE_DIR"])
